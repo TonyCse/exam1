@@ -1,15 +1,34 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const Joi = require('joi');
 const User = require('../models/User');
 
+const loginSchema = Joi.object({
+  username: Joi.string().required(),
+  password: Joi.string().required(),
+});
+
+const registerSchema = Joi.object({
+  username: Joi.string().min(3).max(30).required(),
+  email: Joi.string().email().required(),
+  password: Joi.string().min(8).required(),
+});
+
 exports.login = async (req, res) => {
-  const { username, password } = req.body;
+  const { error, value } = loginSchema.validate(req.body, { abortEarly: false });
+  if (error) {
+    return res.status(400).json({
+      error: 'Données invalides',
+      details: error.details.map((d) => d.message),
+    });
+  }
+
+  const { username, password } = value;
 
   try {
     const user = await User.findOne({ username });
     if (!user) return res.status(400).json({ message: 'Utilisateur non trouvé' });
 
-    // bcrypt.compare vérifie le mot de passe contre le hash stocké en base
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ message: 'Mot de passe incorrect' });
 
@@ -26,7 +45,15 @@ exports.login = async (req, res) => {
 };
 
 exports.register = async (req, res) => {
-  const { username, email, password } = req.body;
+  const { error, value } = registerSchema.validate(req.body, { abortEarly: false });
+  if (error) {
+    return res.status(400).json({
+      error: 'Données invalides',
+      details: error.details.map((d) => d.message),
+    });
+  }
+
+  const { username, email, password } = value;
 
   try {
     const existingUser = await User.findOne({ email });
@@ -34,7 +61,6 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: 'Cet email est déjà utilisé.' });
     }
 
-    // Le hash bcrypt est appliqué automatiquement par le hook pre('save') du modèle User
     const user = new User({ username, email, password });
     await user.save();
 
