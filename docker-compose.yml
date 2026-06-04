@@ -1,32 +1,67 @@
-version: '3'
+version: '3.8'
+
 services:
-  frontend:
-    build: ./frontend
+  mongo:
+    image: mongo:7
     ports:
-      - '3000:3000'
-    depends_on:
-      - backend
+      - '27017:27017'
+    volumes:
+      - mongo_data:/data/db
 
   backend:
     build: ./backend
     ports:
       - '5000:5000'
+    env_file: ./backend/.env
     environment:
-      - MONGO_URI=mongodb://mongo:27017/mydatabase
+      - MONGO_URI=mongodb://mongo:27017/exam1
+      - CORS_ORIGIN=http://localhost:3000
+      - NOTIFICATION_SERVICE_URL=http://gateway:8000
     depends_on:
       - mongo
 
-  mongo:
-    image: mongo
+  gateway:
+    build: ./gateway
     ports:
-      - '27018:27017'
+      - '8000:8000'
+    env_file: ./gateway/.env
+    environment:
+      - NOTIFICATION_SERVICE_URL=http://notifications:4001
+      - STOCK_SERVICE_URL=http://stock-management:4002
+      - BACKEND_URL=http://backend:5000
+      - CORS_ORIGIN=http://localhost:3000
+    depends_on:
+      - backend
+      - notifications
+      - stock-management
 
   notifications:
     build: ./microservices/notifications
     ports:
-      - '4002:4002'
+      - '4001:4001'
+    env_file: ./microservices/notifications/.env
 
   stock-management:
     build: ./microservices/stock-management
     ports:
-      - '4003:4003'
+      - '4002:4002'
+    env_file: ./microservices/stock-management/.env
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/exam1
+    depends_on:
+      - mongo
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        - REACT_APP_API_URL=http://localhost:5000
+        - REACT_APP_GATEWAY_URL=http://localhost:8000
+    ports:
+      - '3000:80'
+    depends_on:
+      - backend
+      - gateway
+
+volumes:
+  mongo_data:
